@@ -1,12 +1,19 @@
-# Usage
-rclock <project> <action>
+# TLDR
+Tracks time spent across different projects.
 
-# Actions
-b = begin clock
-e = end clock
-s = summarize project activity
+# Usage
+```code
+rclock <project> <action>
+```
+
+### Actions
+- b = begin clock
+- e = end clock
+- s = summarize project activity
 
 # Installation
-Clone repo.
-cd into repo.
-cargo install --root .
+```console
+$ git clone https://github.com/jswartzendruber/rclock
+$ cd rclock/
+$ cargo install --root .
+```
