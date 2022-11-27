@@ -11,6 +11,7 @@ fn print_usage() {
     println!("    b = begin clock");
     println!("    e = end clock");
     println!("    s = summarize time");
+    println!("    r = is running?");
     println!("Example: rclock project1 b");
 }
 
@@ -46,6 +47,7 @@ impl Project {
 
 enum Action {
     Summarize,
+    Running,
     Begin,
     End,
 }
@@ -59,6 +61,7 @@ fn main() {
 
     let action = match args[1].as_str() {
         "s" => Action::Summarize,
+	"r" => Action::Running,
         "b" => Action::Begin,
         "e" => Action::End,
         _ => {
@@ -138,6 +141,19 @@ fn main() {
                 display_duration((end - begin).num_seconds(), "Time tracked this session:");
             }
         }
+	Action::Running => {
+	    print!("{{\"state\":");
+	    if already_begun {
+		print!("\"Good\",");
+		print!("\"text\":");
+		print!("\"* Coding *\"");
+	    } else {
+		print!("\"Critical\",");
+		print!("\"text\":");
+		print!("\"* Inactive *\"");
+	    }
+	    print!("}}");
+	}
         Action::Summarize => {
             let one_week_ago = Duration::seconds(now - week_ago);
             let one_day_ago = Duration::seconds(now - today);
