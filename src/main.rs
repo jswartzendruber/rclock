@@ -11,8 +11,9 @@ fn print_usage() {
     println!("    b = begin clock");
     println!("    e = end clock");
     println!("    s = summarize time");
-    println!("    r = is running?");
     println!("Example: rclock project1 b");
+    println!("Example: rclock r");
+    println!("    Shows if any projects are running");
 }
 
 struct Project {
@@ -54,19 +55,83 @@ enum Action {
 
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
-    if args.len() < 2 {
+    if args.is_empty() {
         error("Incorrect arguments.", true);
         std::process::exit(1);
     }
 
-    let action = match args[1].as_str() {
-        "s" => Action::Summarize,
-	"r" => Action::Running,
-        "b" => Action::Begin,
-        "e" => Action::End,
-        _ => {
+    let action = if args.len() == 1 {
+        if args[0].as_str() == "r" {
+            let mut project_files_listing = match OpenOptions::new()
+                .read(true)
+                .append(true)
+                .create(true)
+                .open(tilde("~/.rclockindex").to_string())
+            {
+                Ok(f) => f,
+                Err(e) => {
+                    error(&format!("Failed to open ~/.rclockindex file: {}", e), false);
+                    std::process::exit(1);
+                }
+            };
+            let mut project_index = String::new();
+            project_files_listing
+                .read_to_string(&mut project_index)
+                .unwrap_or_else(|_| panic!("Failed to read ~/.rclockindex file."));
+
+            let mut active = vec![];
+            for line in project_index.lines() {
+                let mut project_file = match OpenOptions::new()
+                    .read(true)
+                    .append(true)
+                    .open(tilde(&format!("~/.rclock-{}", line)).to_string())
+                {
+                    Ok(f) => f,
+                    Err(e) => {
+                        error(
+                            &format!("Failed to open ~/.rclock-{} file: {}", line, e),
+                            false,
+                        );
+                        std::process::exit(1);
+                    }
+                };
+
+                let mut contents = String::new();
+                project_file
+                    .read_to_string(&mut contents)
+                    .unwrap_or_else(|_| panic!("Failed to read ~/.rclock-{} file.", line));
+                let (already_begun, _) = Project::new(line.to_string(), Action::Running)
+                    .is_line_started(contents.lines().last());
+                if already_begun {
+                    active.push(line);
+                }
+            }
+
+            print!("{{\"state\":");
+            if !active.is_empty() {
+                print!("\"Good\",");
+                print!("\"text\":");
+                print!("\"* {} *\"", active[0]);
+            } else {
+                print!("\"Critical\",");
+                print!("\"text\":");
+                print!("\"* Inactive *\"");
+            }
+            print!("}}");
+            std::process::exit(0);
+        } else {
             error("Unknown option.", true);
             std::process::exit(1);
+        }
+    } else {
+        match args[1].as_str() {
+            "s" => Action::Summarize,
+            "b" => Action::Begin,
+            "e" => Action::End,
+            _ => {
+                error("Unknown option.", true);
+                std::process::exit(1);
+            }
         }
     };
     let project = Project::new(args[0].clone(), action);
@@ -86,6 +151,30 @@ fn main() {
             std::process::exit(1);
         }
     };
+
+    let mut project_files_listing = match OpenOptions::new()
+        .read(true)
+        .append(true)
+        .create(true)
+        .open(tilde("~/.rclockindex").to_string())
+    {
+        Ok(f) => f,
+        Err(e) => {
+            error(&format!("Failed to open ~/.rclockindex file: {}", e), false);
+            std::process::exit(1);
+        }
+    };
+    let mut project_index = String::new();
+    project_files_listing
+        .read_to_string(&mut project_index)
+        .unwrap_or_else(|_| panic!("Failed to read ~/.rclockindex file."));
+    if project_index.lines().filter(|x| x == &project.name).count() == 0 {
+        // If project is not in project index, add it
+        project_index.push_str(&project.name);
+        project_files_listing
+            .write_all(format!("{}\n", project.name).as_bytes())
+            .expect("Failed to write to file.");
+    }
 
     let now = Local::now().timestamp();
 
@@ -141,19 +230,6 @@ fn main() {
                 display_duration((end - begin).num_seconds(), "Time tracked this session:");
             }
         }
-	Action::Running => {
-	    print!("{{\"state\":");
-	    if already_begun {
-		print!("\"Good\",");
-		print!("\"text\":");
-		print!("\"* Coding *\"");
-	    } else {
-		print!("\"Critical\",");
-		print!("\"text\":");
-		print!("\"* Inactive *\"");
-	    }
-	    print!("}}");
-	}
         Action::Summarize => {
             let one_week_ago = Duration::seconds(now - week_ago);
             let one_day_ago = Duration::seconds(now - today);
@@ -205,6 +281,7 @@ fn main() {
             );
             display_duration(last_day.iter().map(|x| x.num_seconds()).sum(), "Today:");
         }
+        _ => todo!(),
     }
 }
 
